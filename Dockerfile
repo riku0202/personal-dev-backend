@@ -1,30 +1,14 @@
-# Use the official Golang image to create a build artifact.
-# This is based on Debian and sets the GOPATH to /go.
-# https://hub.docker.com/_/golang
-FROM golang:1.15 as builder
+FROM golang:latest as builder
 
-# Create and change to the app directory.
-WORKDIR /app
+ENV CGO_ENABLED=0
+ENV GOOS=linux
+ENV GOARCH=amd64
+WORKDIR /go/src/github.com/yokoe/cloudrunexp
+COPY . .
+RUN go build main.go
 
-# Retrieve application dependencies.
-# This allows the container build to reuse cached dependencies.
-COPY go.* ./
-RUN go mod download
+# runtime image
+FROM alpine
+COPY --from=builder /go/src/github.com/yokoe/cloudrunexp /app
 
-# Copy local code to the container image.
-COPY . ./
-
-# Build the binary.
-RUN CGO_ENABLED=0 GOOS=linux go build -mod=readonly -v -o server
-
-# Use the official Alpine image for a lean production container.
-# https://hub.docker.com/_/alpine
-# https://docs.docker.com/develop/develop-images/multistage-build/#use-multi-stage-builds
-FROM alpine:3
-RUN apk add --no-cache ca-certificates
-
-# Copy the binary to the production image from the builder stage.
-COPY --from=builder /app/server /server
-
-# Run the web service on container startup.
-CMD ["/server"]
+CMD /app/main $PORT
